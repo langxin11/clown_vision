@@ -1,0 +1,23 @@
+[project]
+name = "clown-vision"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.10.6",
+    "numpy>=2.3.3",
+    "opencv-python>=4.11.0.86",
+    "pyside6>=6.9.2",
+    "scikit-image>=0.25.2",
+]
+
+[project.scripts]
+clown-vision = "clown_vision.ui:main"
+
+#[tool.uv.workspace]
+#members = []
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
