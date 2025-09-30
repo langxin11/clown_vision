@@ -1,3 +1,14 @@
+"""图像预处理模块
+
+该模块包含了一系列用于图像预处理的函数，包括灰度化、二值化和傅里叶变换等操作。
+这些预处理步骤是计算机视觉任务中的基础操作，有助于后续的图像分析和特征提取。
+
+功能包括:
+- 将彩色图像转换为灰度图像 (to_gray)
+- 将灰度图像转换为二值图像 (to_binary)
+- 对灰度图像进行傅里叶变换 (fourier_transform)
+"""
+
 import cv2
 import numpy as np
 
@@ -17,7 +28,7 @@ def to_gray(image):
     """
     return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-def to_binary(gray, thresh=128):
+def to_binary(gray, thresh=128,use_otsu=False):
     """将灰度图像转换为二值图像
 
     使用OpenCV的threshold函数对灰度图像进行全局阈值二值化处理
@@ -27,11 +38,14 @@ def to_binary(gray, thresh=128):
     Args:
         gray (numpy.ndarray): 输入的灰度图像
         thresh (int, optional): 二值化阈值，默认值为128
-
+        use_otsu (bool, optional): 是否使用Otsu阈值，默认为False
     Returns:
         numpy.ndarray: 二值化后的图像，像素值为0或255
     """
-    _, binary = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
+    if use_otsu:
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    else:
+        _, binary = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
     return binary
 
 def fourier_transform(gray):
