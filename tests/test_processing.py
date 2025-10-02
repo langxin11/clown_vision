@@ -43,3 +43,8 @@ fourier = preprocessing.fourier_transform(gray)
 cv2.imshow("Fourier Transform", fourier)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+#==============保存图片====================
+cv2.imwrite("assets/gray.png", gray)
+cv2.imwrite("assets/binary.png", binary)
+cv2.imwrite("assets/fourier.png", fourier)

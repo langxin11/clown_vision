@@ -12,7 +12,6 @@
 import cv2
 import numpy as np
 
-#from matplotlib import pyplot as plt
 
 def to_gray(image):
     """将彩色图像转换为灰度图像
