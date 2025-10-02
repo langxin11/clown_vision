@@ -1,16 +1,53 @@
-# Python-generated files
+# ========== Python 相关 ==========
+# Python项目基础忽略规则
+
+# 编译后的Python文件
 __pycache__/
-*.py[oc]
+*.py[cod]
+
+# 构建输出目录
 build/
 dist/
+*.egg-info/
 wheels/
-*.egg-info
 
-# Virtual environments
-.venv
+# 虚拟环境（根据项目实际使用的环境）
+.venv/
 
+# Python版本文件
 .python-version
 
-.png
-#vscode
+# IDE/编辑器（VSCode，根据实际使用的编辑器保留）
 .vscode/
+*.code-workspace
+
+# 操作系统文件
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# 项目特定规则
+# 测试目录
+tests/QT_demo/
+
+# 日志文件
+*.log
+logs/
+
+# 环境变量
+.env
+*.env
+
+# 图像文件处理
+.png
+.jpg
+.jpeg
+.gif
+.svg
+# 不忽略assets目录下的图像文件，因为README中需要引用它们
+！assets/
+# 如果需要忽略某些图像文件，可以在此处单独列出
