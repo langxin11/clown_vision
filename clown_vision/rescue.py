@@ -182,13 +182,23 @@ class ClownRescuer:
         # 3. 释放交互窗口
         cv2.destroyAllWindows()
 
-        # 4. 合并所有掩码，生成最终小丑掩码
+        # 4. 合并所有掩码，生成最终小丑掩膜
         final_clown_mask = np.zeros(image.shape[:2], np.uint8)
         for mask in self.masks:
             final_clown_mask = cv2.bitwise_or(final_clown_mask, mask)
 
-        # 5. 反转掩码（小丑区域设为0，保留区域设为255），剔除小丑
+        # 5. 取反得到“去小丑掩膜”
         mask_remove_clown = cv2.bitwise_not(final_clown_mask)
-        result = cv2.bitwise_and(image, image, mask=mask_remove_clown)
 
+        # === 新增：引入任务2的“前景掩膜”（黑底白前景）===
+        from . import denoising
+        foreground_mask = denoising.denoise(image)            # 二值：前景255 / 背景0
+        foreground_mask = (foreground_mask > 0).astype('uint8') * 255  # 保底归一
+
+        # === 关键：两掩膜相与，只留下“非小丑的前景”→ 仅气球+牵引线 ===
+        final_mask = cv2.bitwise_and(foreground_mask, mask_remove_clown)
+
+        # === 用最终掩膜抠原图，输出仍为“彩色” ===
+        result = cv2.bitwise_and(image, image, mask=final_mask)
         return result
+
