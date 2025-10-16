@@ -78,24 +78,91 @@ def extract_hog(gray):
     return (hog_image * 255).astype(np.uint8)
 
 
-def extract_haar(image):
-    """提取 Haar 特征（例如检测小丑或气球等目标）
-
-    使用 OpenCV 的 Haar 级联分类器（示例：人脸检测）
-
-    Args:
-        image (numpy.ndarray): 输入彩色图像
-
-    Returns:
-        numpy.ndarray: 绘制检测框后的输出图像
+def extract_haar(image,
+                 cascades=('haarcascade_frontalface_alt2.xml',
+                           'haarcascade_frontalface_default.xml',
+                           'haarcascade_frontalface_alt.xml',
+                           'haarcascade_profileface.xml'),
+                 scale_factor=1.05,      # ⬅ 召回↑：1.05；更稳：1.1
+                 min_neighbors=3,        # ⬅ 召回↑：降到2/3；更稳：5
+                 min_size_ratio=0.05,    # ⬅ 最小目标尺寸占短边比例，调 0.04~0.10
+                 max_size_ratio=0.60,    # ⬅ 最大目标尺寸占短边比例
+                 use_clahe=True,         # ⬅ 弱纹理图建议开
+                 use_bilateral=True,     # ⬅ 去噪保边
+                 second_chance=True):    # ⬅ 第一次没检出时，放宽再试一轮
     """
+    return: 画好框的 BGR 图（无检出则给黄字提示）
+    """
+    out = image.copy()
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    classifier = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-    detections = classifier.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-    output = image.copy()
+    # —— 轻量预处理（可关）
+    if use_clahe:
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        gray = clahe.apply(gray)
+    if use_bilateral:
+        gray = cv2.bilateralFilter(gray, d=5, sigmaColor=50, sigmaSpace=50)
 
-    for (x, y, w, h) in detections:
-        cv2.rectangle(output, (x, y), (x+w, y+h), (0, 255, 0), 2)
+    # —— 加载可用模型
+    cds = []
+    root = cv2.data.haarcascades
+    for name in cascades:
+        clf = cv2.CascadeClassifier(root + name)
+        if not clf.empty():
+            cds.append(clf)
+    if not cds:
+        cv2.putText(out, 'Haar cascade not found', (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255), 2, cv2.LINE_AA)
+        return out
 
-    return output
+    H, W = gray.shape
+    smin = max(16, int(min(H, W) * min_size_ratio))
+    smax = int(min(H, W) * max_size_ratio)
+
+    def detect_once(sf, mn):
+        rects = []
+        for clf in cds:
+            det = clf.detectMultiScale(gray,
+                                       scaleFactor=sf,
+                                       minNeighbors=mn,
+                                       flags=cv2.CASCADE_SCALE_IMAGE,
+                                       minSize=(smin, smin),
+                                       maxSize=(smax, smax))
+            if det is not None and len(det) > 0:
+                rects.extend(det.tolist())
+        return rects
+
+    # —— 第一次尝试：用户给定阈值
+    rects = detect_once(scale_factor, min_neighbors)
+
+    # —— 二次放宽（可关）
+    if second_chance and len(rects) == 0:
+        rects = detect_once(max(1.03, scale_factor*0.98), max(2, min_neighbors-1))
+
+    if len(rects) == 0:
+        cv2.putText(out, 'No Haar detections', (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,255), 2, cv2.LINE_AA)
+        return out
+
+    # —— 极简 NMS，避免多层级联重复框
+    boxes = np.array(rects, dtype=np.float32)
+    x1, y1 = boxes[:,0], boxes[:,1]
+    x2, y2 = boxes[:,0]+boxes[:,2], boxes[:,1]+boxes[:,3]
+    areas = (x2-x1+1)*(y2-y1+1)
+    order = np.argsort(areas)[::-1]
+    keep = []
+    while order.size > 0:
+        i = order[0]; keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+        w = np.maximum(0.0, xx2-xx1+1); h = np.maximum(0.0, yy2-yy1+1)
+        inter = w*h
+        iou = inter/(areas[i] + areas[order[1:]] - inter + 1e-6)
+        order = order[np.where(iou <= 0.3)[0] + 1]
+    rects = boxes[keep].astype(int).tolist()
+
+    for (x, y, w, h) in rects:
+        cv2.rectangle(out, (x, y), (x+w, y+h), (0,255,0), 2)
+    return out
