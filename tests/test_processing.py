@@ -34,6 +34,7 @@ cv2.destroyAllWindows()
 #后续添加测试代码
 # ================测试二值化函数====================
 binary = preprocessing.to_binary(gray, use_otsu=True)
+binary = preprocessing.to_binary(gray, thresh=240,use_otsu=False)
 cv2.imshow("Binary Image", binary)
 cv2.waitKey(0)
 cv2.destroyAllWindows()

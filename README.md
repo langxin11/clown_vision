@@ -29,10 +29,10 @@ Clown Vision Project 是一个基于计算机视觉技术的图像处理项目�
 
 - [X] 图像预处理（灰度化、二值化、傅里叶变换）
 - [X] 图像去噪
-- [ ] 局部特征计算（均值、一阶矩、二阶矩、信息熵）
-- [ ] 图像特征计算（LBP、HOG、Haar特征）
-- [X] 解救小丑
-- [ ] 解开牵引绳
+- [X] 局部特征计算（均值、一阶矩、二阶矩、信息熵）
+- [X] 图像特征计算（LBP、HOG、Haar特征）
+- [X] 解救小丑（增强版预处理算法）
+- [ ] 解开牵引绳（增强版交叉点处理算法）
 
 ### 环境搭建
 
@@ -148,12 +148,15 @@ $Mag_{db}=20\log(1+|F_{shift}(u,v)|)$
 ### 3. 局部特征计算
 
 使用自拟尺寸的滑窗（局部窗口），在图像上滑动计算以下特征：
+
 - 局部均值：窗口内像素值的平均值
 - 局部一阶矩：窗口内像素值的分布中心
 - 局部二阶矩：窗口内像素值的分布分散程度
 - 局部信息熵：窗口内像素值分布的不确定性度量
 
 将计算得到的特征值归一化到0-255的整数范围，输出为灰度图像
+
+<img src="assets/local_features.png" alt="局部特征计算结果" width="200" height="180">
 
 ### 4. 图像特征提取
 
@@ -163,26 +166,63 @@ $Mag_{db}=20\log(1+|F_{shift}(u,v)|)$
 
 所有特征计算完成后进行可视化展示
 
-### 5. 解救小丑
+<img src="assets/harr.png" alt="图像特征提取结果" width="200" height="180">
 
-基于面向对象设计实现的小丑剔除功能，通过颜色特征自动检测、交互式鼠标框选和GrabCut算法分割，精确剔除小丑区域，保留气球和牵引线。
+### 5. 解救小丑（增强版预处理算法）
+
+基于面向对象设计实现的小丑剔除功能，通过增强的颜色特征自动检测、交互式鼠标框选和GrabCut算法分割，精确剔除小丑区域，保留气球和牵引线。
 
 #### 实现原理
-1. **自动检测**：将图像转换到HSV空间，利用小丑通常具有高饱和度、高亮度的鲜艳色彩特性，自动检测出可能的小丑区域
+
+1. **增强自动检测**：
+
+   - 将图像转换到HSV空间，利用小丑通常具有高饱和度、高亮度的鲜艳色彩特性
+   - 添加颜色空间转换和增强（HSV空间）
+   - 饱和度和亮度增强
+   - 对比度增强使用LAB空间CLAHE
+   - 动态阈值调整，提高检测准确性
+   - 边缘检测增强，使用Canny算法
 2. **GrabCut分割**：对检测区域应用GrabCut算法进行前景分割，生成初始掩码
 3. **交互优化**：提供鼠标拖动框选功能，用户可手动补充选择遗漏的区域，每次框选后自动执行GrabCut并合并掩码
 4. **结果生成**：合并所有分割掩码，反转后生成最终掩码，实现小丑区域剔除，保留气球和牵引线
 
 #### 使用说明
+
 - 程序启动时自动显示初始检测框
 - 鼠标拖动框选需要保留的区域，松开鼠标自动执行GrabCut并合并掩码
 - 按F键确认最终结果，按Q键退出操作
 
-<img src="assets/rescue.png" alt="img" width="200" height="180">
+<img src="assets/enhanced_rescue.png" alt="增强版解救小丑结果" width="200" height="180">
 
-### 6. 解开牵引绳
+### 6. 解开牵引绳（增强版交叉点处理算法）
 
-使用图像处理算法识别并分离三条不同的牵引绳，然后用不同的颜色进行标记，清晰展示每条牵引绳的走向和位置
+使用先进的图像处理算法识别并分离三条不同的牵引绳，通过增强的交叉点检测和路径选择算法，实现精确的分色标记。
+
+#### 核心改进
+
+1. **增强的交叉点检测算法**：
+
+   - 基于度检测、局部拓扑结构验证和几何特征分析
+   - 移除过于接近的交叉点，提高检测准确性
+2. **线段几何特征分析**：
+
+   - 计算线段的曲率和方向一致性
+   - 检测线段的分叉情况，为路径选择提供量化依据
+3. **全局拓扑优化**：
+
+   - 分析整体拓扑结构，优化交叉点处的标签分配
+   - 确保路径的连续性和一致性
+4. **智能路径选择**：
+
+   - 在交叉点处基于方向一致性和几何特征选择最佳路径
+   - 综合评分机制（方向一致性60% + 几何特征40%）
+   - 避免在交叉点处错误分配标签
+
+#### 实现流程
+
+- 前景掩膜 → 骨架化 → 种子点选择 → 增强多源BFS → 全局拓扑优化 → 三色渲染
+
+<img src="assets/optimized_untangle.png" alt="增强版牵引绳分色结果" width="200" height="180">
 
 ## 运行说明
 
@@ -193,16 +233,52 @@ cd clown_vision
 python main.py
 ```
 
+也可使用无界面命令行工具（适合服务器/CI环境）：
+
+```bash
+# 预处理（灰度/二值/傅里叶）并保存到目录
+python -m clown_vision.cli preprocess --input assets/test.png --output-dir assets/cli_out --otsu
+
+# 去噪掩膜
+python -m clown_vision.cli denoise --input assets/test.png --output assets/cli_out/denoise.png
+
+# 特征提取（lbp/hog/haar）
+python -m clown_vision.cli features --input assets/test.png --type lbp --output assets/cli_out/lbp.png
+
+# 局部统计拼图
+python -m clown_vision.cli local-stats --input assets/test.png --win 15 --output assets/cli_out/local_stats.png
+
+# 牵引绳分色（增强版）
+python -m clown_vision.cli untangle --input assets/test.png --output assets/cli_out/optimized_untangle.png
+
+# 完整处理流程（增强版）
+python -m clown_vision.cli full-pipeline --input assets/test.png --output assets/cli_out/complete_pipeline.png
+```
+
+安装为脚本后也可使用：`clown-vision-cli`（见 `pyproject.toml: [project.scripts]`）。
+
 ## 常见问题解答
 
 ### Q: 运行程序时出现"找不到模块"的错误怎么办？
-A: 请确保已正确安装所有依赖包，可以使用`pip install -r requirements.txt`命令安装所需依赖。
+
+A: 请确保已正确安装所有依赖包，可以使用 `pip install -r requirements.txt`命令安装所需依赖。
 
 ### Q: "解救小丑"功能如何使用？
+
 A: 点击界面上的"解救小丑"按钮后，系统会自动检测图像中的鲜艳区域。您可以通过鼠标框选需要保留的区域，然后按F键确认分割结果，按Q键退出操作。
 
 ### Q: 程序支持处理其他图片吗？
-A: 目前程序主要针对测试图片进行优化，如需处理其他图片，可能需要调整部分算法参数。
+
+A: 目前程序主要针对测试图片进行优化，如需处理其他图片，可能需要调整部分算法参数。可在 `clown_vision/config.py` 中修改去噪与形态学参数（例如 `denoise_adaptive`、`denoise_fixed_thresh`、`morph_kernel` 等）。
 
 ### Q: 界面显示异常或响应缓慢怎么办？
+
 A: 请确保您的计算机满足基本的硬件要求，并且关闭其他占用大量资源的程序。如果问题依然存在，可以尝试重启程序。
+
+### Q: 增强版交叉点处理算法相比原算法有哪些优势？
+
+A: 增强版算法通过多级交叉点检测、线段几何特征分析和全局拓扑优化，在交叉点处能够更准确地选择路径，避免错误分配标签，显著提高分色准确性，特别是在复杂交叉点情况下表现更佳。
+
+### Q: 如何使用增强版的牵引绳分色功能？
+
+A: 增强版算法已集成到主程序中，通过GUI界面或CLI命令 `python -m clown_vision.cli untangle` 即可自动使用。算法会自动检测交叉点、分析线段几何特征并进行全局拓扑优化，无需额外参数配置。

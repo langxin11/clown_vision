@@ -4,16 +4,17 @@ import sys
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import numpy as np
 import cv2
+import numpy as np
 import pytest
 
 from clown_vision.features import (
-    local_statistics,
-    extract_lbp,
+    extract_haar,
     extract_hog,
-    extract_haar
+    extract_lbp,
+    local_statistics,
 )
+
 
 def test_local_statistics_shapes_and_types():
     """测试 local_statistics 函数输出的形状、数据类型和值范围是否符合预期

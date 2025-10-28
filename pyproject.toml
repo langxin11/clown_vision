@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 clown-vision = "clown_vision.ui:main"
+clown-vision-cli = "clown_vision.cli:main"
 
 #[tool.uv.workspace]
 #members = []
