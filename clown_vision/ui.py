@@ -4,12 +4,23 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QLabel, QPushButton, QGroupBox,
-    QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QSplitter,
-    QStatusBar, QSpinBox, QScrollArea, QMessageBox
+    QApplication,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QSplitter,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 from clown_vision.rescue import ClownRescuer
@@ -23,7 +34,7 @@ for parent in [current_dir, current_dir.parent, current_dir.parent.parent]:
         ICON_DIR = icon_candidate
         break
 
-from . import preprocessing, denoising, features, untangle
+from . import denoising, features, preprocessing, untangle
 from .config import default_params
 from .utils import read_image_any_path, save_image_any_path
 
@@ -75,7 +86,6 @@ class LocalFeatureThread(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
-
 # ---------- 主界面类 ----------
 class VisionUI(QWidget):
     def __init__(self):
@@ -86,6 +96,7 @@ class VisionUI(QWidget):
         self.gray = None
         self.current_result = None
         self.current_image_path = ""
+        self.rescued_mask = None  # 由"解救小丑"得到的前景掩膜（仅气球+牵引绳）
 
         # 状态栏
         self.statusBar = QStatusBar()
@@ -153,7 +164,7 @@ class VisionUI(QWidget):
         self.btn_local = QPushButton("局部特征")
         self.btn_lbp = QPushButton("LBP")
         self.btn_hog = QPushButton("HOG")
-        self.btn_haar = QPushButton("Haar")
+        self.btn_haar = QPushButton("Haar(示例)")
         for btn in [self.btn_local, self.btn_lbp, self.btn_hog, self.btn_haar]:
             btn.setFixedHeight(35)
         grid2.addWidget(self.btn_local, 0, 0)
@@ -167,10 +178,12 @@ class VisionUI(QWidget):
         vsp = QVBoxLayout()
         self.btn_rescue = QPushButton("解救小丑")
         self.btn_untangle = QPushButton("牵引绳分割")
-        for btn in [self.btn_rescue, self.btn_untangle]:
+        self.btn_untangle_seed = QPushButton("牵引绳分割(手动选种子)")
+        for btn in [self.btn_rescue, self.btn_untangle, self.btn_untangle_seed]:
             btn.setFixedHeight(35)
         vsp.addWidget(self.btn_rescue)
         vsp.addWidget(self.btn_untangle)
+        vsp.addWidget(self.btn_untangle_seed)
         sp_group.setLayout(vsp)
 
         # 参数设置
@@ -205,6 +218,7 @@ class VisionUI(QWidget):
         self.btn_haar.clicked.connect(self.show_haar)
         self.btn_rescue.clicked.connect(self.show_rescue)
         self.btn_untangle.clicked.connect(self.show_untangle)
+        self.btn_untangle_seed.clicked.connect(self.show_untangle_with_seeds)
         self.spin_win.valueChanged.connect(self.update_params)
         return panel
 
@@ -286,7 +300,6 @@ class VisionUI(QWidget):
         self.thread.error.connect(self.on_local_error)
         self.thread.start()
 
-
     def on_local_finished(self, result):
         # 期望收到四幅 0-255 灰度图：mean / moment1 / moment2 / entropy
         local_mean, moment1, moment2, entropy_img = result
@@ -294,7 +307,6 @@ class VisionUI(QWidget):
         self.current_result = combined
         self.label.setPixmap(cv2_to_qpixmap(combined))
         self.update_status("局部特征：均值 / 一阶中心绝对矩 / 二阶中心矩 / 熵")
-
 
     def on_local_error(self, msg):
         self.label.setText(f"❌ 错误: {msg}")
@@ -340,15 +352,45 @@ class VisionUI(QWidget):
             self.current_result = result
             self.label.setPixmap(cv2_to_qpixmap(result))
             self.update_status("已完成小丑解救")
+            # 直接使用救援流程产生的"非小丑前景掩膜"（仅气球+牵引绳）
+            self.rescued_mask = getattr(rescuer, 'last_nonclown_foreground_mask', None)
 
     def show_untangle(self):
         if self.image is None:
             self.update_status("请先加载图像")
             return
-        result = untangle.colorize_lines(self.image)
+        # 若已有"解救小丑"的前景掩膜，则复用以避免小丑边缘干扰
+        result = untangle.colorize_lines(self.image, getattr(self, 'rescued_mask', None))
         self.current_result = result
         self.label.setPixmap(cv2_to_qpixmap(result))
         self.update_status("已显示牵引绳分割结果")
+
+    def show_untangle_with_seeds(self):
+        if self.image is None:
+            self.update_status("请先加载图像")
+            return
+        QMessageBox.information(self, "说明", "请在骨架图像上依次点击三条牵引绳的起点，然后按F确认，Q取消")
+        
+        # 获取任务5的结果（如果已执行）
+        rescue_result = None
+        if hasattr(self, 'current_result') and self.current_result is not None:
+            # 检查当前结果是否是解救小丑的结果
+            rescue_result = self.current_result
+        
+        # 使用改进的牵引绳分色算法，在骨架图像上选择种子点
+        result = untangle.colorize_lines(
+            self.image, 
+            fg_mask=getattr(self, 'rescued_mask', None),
+            rescue_result=rescue_result,
+            interactive_mode=True
+        )
+        
+        if result is not None:
+            self.current_result = result
+            self.label.setPixmap(cv2_to_qpixmap(result))
+            self.update_status("已显示牵引绳分割结果（手动选种子）")
+        else:
+            self.update_status("已取消种子选择")
 
     # ---------- 保存 ----------
     def save_current(self):
@@ -368,7 +410,6 @@ class VisionUI(QWidget):
         win = int(max(3, val // 2 * 2 + 1))
         default_params.sliding_window_size = win
         self.update_status(f"滑窗大小更新为 {win}")
-
 
 # ---------- 主入口 ----------
 def main():
